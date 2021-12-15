@@ -5,7 +5,7 @@
 #define FILE_NAME_MAX_LENGTH 10
 #define ITEMS_PER_PAGE 10
 #define OUTPUT_BUFFER_CAPACITY 12
-#define DATA_PATH "data_large.txt"
+#define DATA_PATH "data.txt"
 
 void sort();
 
@@ -23,12 +23,14 @@ void moveListToHeap(int array[], int *heapSize, int *listSize);
 
 void heapify(int array[], int heapSize, int i);
 
-int readPageFromFile(int array[], int *size, FILE *file);
+int readPageFromFile(int array[], int *size, int *offset, FILE *file);
 
 void printArray(int array[], int heapSize);
 
 void cleanUp(int buffer[], int inputBuffer[], int outputBuffer[], int *heapSize, int *listSize, int *inputBufferSize, int *outputBufferSize,
              int *runNumber);
+
+int popFromInputBuffer(int inputBuffer[], int *inputBufferSize, int *offset);
 
 void swap(int *a, int *b);
 
@@ -44,65 +46,60 @@ void sort() {
     int heapSize = 0;
     int listSize = 0;
     int inputBufferSize = 0;
+    int inputBufferOffset = 0;
     int outputBufferSize = 0;
     int runNumber = 0;
     int shouldStop = 0;
     int isEndOfFile = 0;
-    int i = 0;
     int element;
 
     FILE *file = fopen(DATA_PATH, "r");
 
     while (!shouldStop) {
-        // If no elements in input buffer, read a page from file
-        if (i >= inputBufferSize) {
-            isEndOfFile = readPageFromFile(inputBuffer, &inputBufferSize, file);
-            i = 0;
+        // There is space in heap, insert to heap from input buffer
+        if (heapSize + listSize < 4) {
+            // If input buffer is empty and it's not end of file, then read a page from file
+            if (inputBufferSize == 0 && !isEndOfFile)
+                isEndOfFile = readPageFromFile(inputBuffer, &inputBufferSize, &inputBufferOffset, file);
+
+            // If input buffer is not empty, insert first element of input buffer to heap or list depending on value
+            if (inputBufferSize > 0) {
+                element = popFromInputBuffer(inputBuffer, &inputBufferSize, &inputBufferOffset);
+
+                // If output buffer is empty or the last element of output buffer is smaller than the element, insert into heap
+                if (outputBufferSize == 0 || outputBuffer[outputBufferSize - 1] < element)
+                    insertToHeap(buffer, &heapSize, element);
+
+                // Otherwise, insert into list to protect the order
+                else
+                    insertToList(buffer, &listSize, element);
+            }
         }
 
-        if (isEndOfFile && i >= inputBufferSize - 1) {
-            shouldStop = 1;
-            cleanUp(buffer, inputBuffer, outputBuffer, &heapSize, &listSize, &inputBufferSize, &outputBufferSize, &runNumber);
-        }
-
-        // There is space for next element, insert the element recently read from file into the heap
-        else if (heapSize + listSize < B && inputBufferSize) {
-            element = inputBuffer[i++];
-            if (outputBufferSize == 0 || outputBuffer[outputBufferSize - 1] < element)
-                insertToHeap(buffer, &heapSize, element);
-            else
-                insertToList(buffer, &listSize, element);
-
-        }
-
-        // No space for next element, send first element of the heap to output buffer
+        // There is no space in the heap, send the root element of the heap to output buffer
         else {
-            if (outputBufferSize == 0 || (listSize < B && buffer[listSize] > outputBuffer[outputBufferSize - 1])) {
+            // If there is an element in heap and the last element of output buffer is not greater than the first element of heap
+            if (listSize < B && (outputBufferSize == 0 || outputBuffer[outputBufferSize - 1] <= buffer[listSize]))
                 insertToOutputBuffer(outputBuffer, &outputBufferSize, removeFromHeap(buffer, &heapSize));
-            } else {
+
+            // If list is full or the first element of heap is not insertable to output buffer, finish the run
+            else {
                 writeToRunFile(outputBuffer, &outputBufferSize, &runNumber);
                 printf("RUN  = ", runNumber);
                 printArray(outputBuffer, outputBufferSize);
                 moveListToHeap(buffer, &heapSize, &listSize);
-
-                // In the end, if still there are elements in the heap, empty heap
-                // if (shouldStop && heapSize > 0) {
-                //     while (heapSize > 0)
-                //         insertToOutputBuffer(outputBuffer, &outputBufferSize, removeFromHeap(buffer, &heapSize));
-
-                //     writeToRunFile(outputBuffer, &outputBufferSize, &runNumber);
-                //     printf("RUN  = ", runNumber);
-                //     printArray(outputBuffer, outputBufferSize);
-                // }
             }
         }
 
+        // Print current status
         printf("OUT  = ");
         printArray(outputBuffer, outputBufferSize);
         printf("HEAP = ");
         printArray(&buffer[B - heapSize], heapSize);
         printf("LIST = ");
         printArray(buffer, listSize);
+        printf("IN = ");
+        printArray(&inputBuffer[inputBufferOffset], inputBufferSize);
         printf("\n");
     }
 
@@ -190,10 +187,10 @@ void heapify(int array[], int heapSize, int i) {
     }
 }
 
-int readPageFromFile(int array[], int *size, FILE *file) {
+int readPageFromFile(int array[], int *size, int *offset, FILE *file) {
     int i = 0;
     *size = 0;
-    array;
+    *offset = 0;
 
     while (i < ITEMS_PER_PAGE && !feof(file)) {
         fscanf(file, "%d", &array[i]);
@@ -214,43 +211,18 @@ void printArray(int array[], int size) {
 }
 
 void cleanUp(int buffer[], int inputBuffer[], int outputBuffer[], int *heapSize, int *listSize, int *inputBufferSize, int *outputBufferSize,
-             int *runNumber) {
-    int i;
-    int element;
+             int *runNumber) {}
 
-    // Condition yaz
-    while ((*heapSize) > 0 && (*listSize) > 0 && (*inputBufferSize) > 0) {
-        // There is space for next element, insert the element recently read from file into the heap
-        if ((*heapSize) + (*listSize) < B && (*inputBufferSize)) {
-            element = inputBuffer[i++];
-            if ((*outputBufferSize) == 0 || outputBuffer[(*outputBufferSize) - 1] < element)
-                insertToHeap(buffer, heapSize, element);
-            else
-                insertToList(buffer, listSize, element);
-        }
+int popFromInputBuffer(int *inputBuffer, int *inputBufferSize, int *inputBufferOffset) {
+    if ((*inputBufferSize) == 0)
+        return -1;
 
-        // No space for next element, send first element of the heap to output buffer
-        else {
-            if ((*outputBufferSize) == 0 || ((*listSize) < B && buffer[*listSize] > outputBuffer[(*outputBufferSize) - 1])) {
-                insertToOutputBuffer(outputBuffer, outputBufferSize, removeFromHeap(buffer, heapSize));
-            } else {
-                writeToRunFile(outputBuffer, outputBufferSize, runNumber);
-                printf("RUN  = ", *runNumber);
-                printArray(outputBuffer, *outputBufferSize);
-                moveListToHeap(buffer, heapSize, listSize);
+    int element = inputBuffer[*inputBufferOffset];
 
-                // In the end, if still there are elements in the heap, empty heap
-                // if (shouldStop && heapSize > 0) {
-                //     while (heapSize > 0)
-                //         insertToOutputBuffer(outputBuffer, &outputBufferSize, removeFromHeap(buffer, &heapSize));
+    (*inputBufferOffset)++;
+    (*inputBufferSize)--;
 
-                //     writeToRunFile(outputBuffer, &outputBufferSize, &runNumber);
-                //     printf("RUN  = ", runNumber);
-                //     printArray(outputBuffer, outputBufferSize);
-                // }
-            }
-        }
-    }
+    return element;
 }
 
 void swap(int *a, int *b) {
