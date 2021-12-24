@@ -1,3 +1,4 @@
+/* ---------------- PREPROCESSOR DEFINITIONS START ---------------- */
 #include <stdio.h>
 #include <stdlib.h>
 #define N 100
@@ -6,50 +7,69 @@
 #define ITEMS_PER_PAGE 10
 #define OUTPUT_BUFFER_CAPACITY 12
 #define DATA_PATH "data_large.txt"
+/* ---------------- PREPROCESSOR DEFINITIONS END---------------- */
 
+/* ---------------- FUNTION DECLARATIONS START ---------------- */
+// High level function to apply external merge sort with replacement selection to file in pre-defined constant DATA_PATH
 void sort();
 
+// Writes output buffer with given size to file with the file name "RUN-{runNumber}.txt"
 void writeToRunFile(int outputBuffer[], int *size, int *runNumber);
 
+// Inserts value to heap-tree stored in given array with heapSize and then updates size and heapifies the tree
 void insertToHeap(int array[], int *heapSize, int value);
 
+// Inserts value to given array with listSize and then heapifies the tree
 void insertToList(int array[], int *listSize, int value);
 
+// Inserts the value to given array (which is output buffer), then updates the size
 void insertToOutputBuffer(int array[], int *size, int value);
 
+// Removes the first element from heap, then updates the size and returns removed element
 int removeFromHeap(int array[], int *heapSize);
 
+// Move all elements in list to heap, also sets listSize = 0 and heapSize = B
 void moveListToHeap(int array[], int *heapSize, int *listSize);
 
-void heapify(int array[], int heapSize, int i);
-
+// Reads a page from given file pointer into array (which is input buffer), then sets start offset to 0 and updates the size
 int readPageFromFile(int array[], int *size, int *offset, FILE *file);
 
-void printArray(int array[], int heapSize);
-
-void cleanUp(int buffer[], int inputBuffer[], int outputBuffer[], int *heapSize, int *listSize, int *inputBufferSize, int *outputBufferSize, int *runNumber);
-
+// Removes the first element of input buffer and updates the start offset and the size
 int popFromInputBuffer(int inputBuffer[], int *inputBufferSize, int *offset);
 
-void swap(int *a, int *b);
+// Heapifies given array heap-tree as min-heap
+void heapify(int array[], int heapSize, int i);
 
+// Prints the current status of output buffer, heap, list and input buffer
+void printCurrentStatus(int outputBuffer[], int outputBufferSize, int buffer[], int heapSize, int listSize, int inputBuffer[], int inputBufferOffset, int inputBufferSize);
+
+// Prints array with given size
+void printArray(int array[], int size);
+
+// Swaps the values inside of two given integer pointers
+void swap(int *a, int *b);
+/* ---------------- FUNTION DECLARATIONS END ---------------- */
+
+/* ---------------- MAIN FUNCTION START ---------------- */
 int main() {
     sort();
     return 0;
 }
+/* ---------------- MAIN FUNCTION END ---------------- */
 
+/* ---------------- FUNCTION DEFINITIONS START ---------------- */
 void sort() {
-    int buffer[B];
-    int inputBuffer[ITEMS_PER_PAGE];
-    int outputBuffer[OUTPUT_BUFFER_CAPACITY];
-    int heapSize = 0;
-    int listSize = 0;
-    int inputBufferSize = 0;
-    int inputBufferOffset = 0;
-    int outputBufferSize = 0;
-    int runNumber = 0;
-    int isEndOfFile = 0;
-    int element;
+    int buffer[B];                             // Buffer with size B, contains heap and list in one array (maintained with sizes and indexes)
+    int inputBuffer[ITEMS_PER_PAGE];           // Input buffer, stores data from file when a page was read from file
+    int outputBuffer[OUTPUT_BUFFER_CAPACITY];  // Output buffer, stores elements of run file in memory until they will be written to run file
+    int heapSize = 0;                          // Size of heap stored in array named "buffer"
+    int listSize = 0;                          // Size of list stored in array named "buffer"
+    int inputBufferSize = 0;                   // Size of input buffer stored in array named "inputBuffer"
+    int inputBufferOffset = 0;                 // Start index of input buffer stored in array named "inputBuffer", increments after each pop from input buffer
+    int outputBufferSize = 0;                  // Size of output buffer stored in array named "outputBuffer"
+    int runNumber = 0;                         // Run number used for name of run file, increments after each run file creation
+    int isEndOfFile = 0;                       // Boolean variable stores wheter it is end of file (1) or not (0)
+    int element;                               // Variable to temporarily store element when popped from input buffer
 
     FILE *file = fopen(DATA_PATH, "r");
 
@@ -83,23 +103,13 @@ void sort() {
 
             // If list is full or the first element of heap is not insertable to output buffer, finish the run
             else {
-                printf("RUN%02d = ", runNumber);
-                printArray(outputBuffer, outputBufferSize);
                 writeToRunFile(outputBuffer, &outputBufferSize, &runNumber);
                 moveListToHeap(buffer, &heapSize, &listSize);
             }
         }
 
         // Print current status
-        printf("OUT   = ");
-        printArray(outputBuffer, outputBufferSize);
-        printf("HEAP  = ");
-        printArray(&buffer[B - heapSize], heapSize);
-        printf("LIST  = ");
-        printArray(buffer, listSize);
-        printf("IN    = ");
-        printArray(&inputBuffer[inputBufferOffset], inputBufferSize);
-        printf("\n");
+        printCurrentStatus(outputBuffer, outputBufferSize, buffer, heapSize, listSize, inputBuffer, inputBufferOffset, inputBufferSize);
     }
 
     // Loop until heap, list, inputBuffer and outputBuffer is empty to clean up remaining elements after reached end of file
@@ -125,23 +135,13 @@ void sort() {
 
             // If list is full or the first element of heap is not insertable to output buffer, finish the run
             else {
-                printf("RUN%02d = ", runNumber);
-                printArray(outputBuffer, outputBufferSize);
                 writeToRunFile(outputBuffer, &outputBufferSize, &runNumber);
                 moveListToHeap(buffer, &heapSize, &listSize);
             }
         }
 
         // Print current status
-        printf("OUT   = ");
-        printArray(outputBuffer, outputBufferSize);
-        printf("HEAP  = ");
-        printArray(&buffer[B - heapSize], heapSize);
-        printf("LIST  = ");
-        printArray(buffer, listSize);
-        printf("IN    = ");
-        printArray(&inputBuffer[inputBufferOffset], inputBufferSize);
-        printf("\n");
+        printCurrentStatus(outputBuffer, outputBufferSize, buffer, heapSize, listSize, inputBuffer, inputBufferOffset, inputBufferSize);
     }
 
     fclose(file);
@@ -151,6 +151,12 @@ void writeToRunFile(int outputBuffer[], int *size, int *runNumber) {
     FILE *file;
     int i;
     char runFileName[FILE_NAME_MAX_LENGTH];
+
+    // Print run output
+    printf("RUN%02d = ", runNumber);
+    printArray(outputBuffer, *size);
+
+    // Format the name of run file
     sprintf(runFileName, "RUN-%02d.txt", *runNumber);
 
     file = fopen(runFileName, "w");
@@ -244,14 +250,23 @@ int readPageFromFile(int array[], int *size, int *offset, FILE *file) {
     return 0;
 }
 
+void printCurrentStatus(int outputBuffer[], int outputBufferSize, int buffer[], int heapSize, int listSize, int inputBuffer[], int inputBufferOffset, int inputBufferSize) {
+    printf("OUT   = ");
+    printArray(outputBuffer, outputBufferSize);
+    printf("HEAP  = ");
+    printArray(&buffer[B - heapSize], heapSize);
+    printf("LIST  = ");
+    printArray(buffer, listSize);
+    printf("IN    = ");
+    printArray(&inputBuffer[inputBufferOffset], inputBufferSize);
+    printf("\n");
+}
+
 void printArray(int array[], int size) {
     int i;
     for (i = 0; i < size; ++i)
         printf("%d ", array[i]);
     printf("\n");
-}
-
-void cleanUp(int buffer[], int inputBuffer[], int outputBuffer[], int *heapSize, int *listSize, int *inputBufferSize, int *outputBufferSize, int *runNumber) {
 }
 
 int popFromInputBuffer(int *inputBuffer, int *inputBufferSize, int *inputBufferOffset) {
@@ -271,3 +286,4 @@ void swap(int *a, int *b) {
     *b = *a;
     *a = temp;
 }
+/* ---------------- FUNCTION DEFINITIONS END ---------------- */
